@@ -71,7 +71,7 @@ jobs:
           terraform init -backend=false
           terraform validate
       - name: Trivy config scan (Terraform + K8s manifests)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: .
@@ -100,7 +100,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Trivy image scan (fail on fixable CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: urlshort:ci
           severity: CRITICAL
