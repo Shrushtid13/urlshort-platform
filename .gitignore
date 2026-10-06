@@ -10,3 +10,6 @@ __pycache__/
 .env
 image.tar
 plan.txt
+
+terraform.exe
+terraform.zip
