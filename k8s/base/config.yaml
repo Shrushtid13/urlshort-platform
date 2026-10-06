@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: urlshort-config
+data:
+  REDIS_URL: redis://redis:6379/0
+  BASE_URL: http://urlshort.local
+  LOG_LEVEL: INFO
+---
+# DEMO ONLY. In real clusters use External Secrets / Sealed Secrets / Vault.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: urlshort-secret
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: supersecret
+  DATABASE_URL: postgresql://urlshort:supersecret@postgres:5432/urlshort

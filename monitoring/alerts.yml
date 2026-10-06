@@ -1,0 +1,32 @@
+groups:
+  - name: urlshort
+    rules:
+      - alert: AppDown
+        expr: up{job="urlshort"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "urlshort target is down"
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_requests_total[5m])), 1) > 0.02
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "5xx error rate above 2% for 5 minutes"
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) > 0.5
+        for: 10m
+        labels: { severity: warn }
+        annotations:
+          summary: "p95 latency above 500ms for 10 minutes"
+      - alert: LowCacheHitRatio
+        expr: |
+          sum(rate(redirect_cache_total{result="hit"}[10m]))
+            / clamp_min(sum(rate(redirect_cache_total[10m])), 0.001) < 0.5
+        for: 15m
+        labels: { severity: warn }
+        annotations:
+          summary: "Redirect cache hit ratio below 50%; check Redis"

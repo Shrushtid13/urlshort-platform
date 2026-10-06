@@ -1,0 +1,38 @@
+name: Terraform plan
+
+on:
+  pull_request:
+    paths: ["terraform/**"]
+
+permissions:
+  id-token: write       # OIDC
+  contents: read
+  pull-requests: write  # comment the plan
+
+jobs:
+  plan:
+    # Only runs once you've set the AWS_PLAN_ROLE_ARN repo variable (see README)
+    if: ${{ vars.AWS_PLAN_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: terraform }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-south-1' }}
+      - run: terraform init
+      - id: plan
+        run: terraform plan -lock=false -no-color -var="github_repo=${{ github.repository }}" -out=tfplan 2>&1 | tee plan.txt
+      - uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('terraform/plan.txt', 'utf8').slice(-60000);
+            await github.rest.issues.createComment({
+              ...context.repo, issue_number: context.issue.number,
+              body: '### Terraform plan\n```\n' + plan + '\n```'
+            });

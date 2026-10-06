@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: urlshort
+  labels: { app: urlshort }
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector: { matchLabels: { app: urlshort } }
+  template:
+    metadata:
+      labels: { app: urlshort }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: app
+          image: urlshort
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8000 }]
+          envFrom:
+            - configMapRef: { name: urlshort-config }
+            - secretRef: { name: urlshort-secret }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            failureThreshold: 30
+            periodSeconds: 2
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: urlshort
+spec:
+  selector: { app: urlshort }
+  ports: [{ name: http, port: 80, targetPort: http }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: urlshort
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: urlshort }
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: urlshort
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: urlshort } }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: urlshort
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: urlshort.local
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: urlshort, port: { number: 80 } } } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: data-tier-only-from-app
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: In, values: [postgres, redis] }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: urlshort } }

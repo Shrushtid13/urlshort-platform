@@ -1,0 +1,26 @@
+{
+  "title": "URL Shortener",
+  "uid": "urlshort",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    { "id": 1, "type": "timeseries", "title": "Requests / sec by status",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "targets": [ { "expr": "sum by (status) (rate(http_requests_total[1m]))", "legendFormat": "{{status}}" } ] },
+    { "id": 2, "type": "timeseries", "title": "p95 latency (s)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "targets": [ { "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[1m])))", "legendFormat": "p95" } ] },
+    { "id": 3, "type": "stat", "title": "Links created",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "targets": [ { "expr": "sum(links_created_total)" } ] },
+    { "id": 4, "type": "gauge", "title": "Redirect cache hit ratio",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "fieldConfig": { "defaults": { "min": 0, "max": 1, "unit": "percentunit" } },
+      "targets": [ { "expr": "sum(redirect_cache_total{result=\"hit\"}) / clamp_min(sum(redirect_cache_total), 1)" } ] }
+  ]
+}

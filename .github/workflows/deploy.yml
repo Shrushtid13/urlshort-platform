@@ -1,0 +1,49 @@
+name: Deploy to EKS
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag from GHCR (e.g. sha-abc1234 or latest)"
+        required: true
+        default: latest
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency: deploy-production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production   # configure required reviewers in repo Settings -> Environments
+    env:
+      CLUSTER: ${{ vars.EKS_CLUSTER || 'urlshort' }}
+      REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.REGION }}
+      - run: aws eks update-kubeconfig --region "$REGION" --name "$CLUSTER"
+      - name: Set image
+        working-directory: k8s/base
+        run: |
+          IMG="ghcr.io/${GITHUB_REPOSITORY,,}"
+          kustomize edit set image urlshort="$IMG:${{ inputs.image_tag }}"
+      - name: Apply
+        run: kubectl apply -k k8s/base
+      - name: Wait for rollout (auto-rollback on failure)
+        run: |
+          if ! kubectl -n urlshort rollout status deployment/urlshort --timeout=180s; then
+            echo "::error::Rollout failed, rolling back"
+            kubectl -n urlshort rollout undo deployment/urlshort
+            kubectl -n urlshort rollout status deployment/urlshort --timeout=120s
+            exit 1
+          fi
+      - name: Post-deploy smoke test
+        run: |
+          kubectl -n urlshort run smoke --rm -i --restart=Never --image=curlimages/curl -- \
+            curl -fsS http://urlshort/readyz
